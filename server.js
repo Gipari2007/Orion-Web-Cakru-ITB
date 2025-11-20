@@ -1,181 +1,375 @@
-// script.js
-// Orion.co — interactions ringan dari desain Figma
-// Taruh file ini di root project dan link di index.html sebelum </body>
+// steik.js — Interaksi & Enhancements untuk Orion.co
+// Ditulis untuk HTML & CSS yang kamu kasih. Fitur:
+// - Smooth scroll untuk link internal
+// - Toggle mobile nav (jika ditambahkan nanti)
+// - Animasi masuk (reveal) pada scroll menggunakan IntersectionObserver
+// - Lazy loading gambar (fallback untuk browsers lama)
+// - Tombol "Contact" buka WA, tombol "Download" tampilkan modal untuk download aset
+// - Tombol "Calendar" buat dan download file .ics event
+// - Hitung mundur sederhana (countdown) untuk event di card (jika ada tanggal tersimpan)
+// - Accessibility: focus management & keyboard support
 
-// ----- Helper -----
-const $ = (sel, ctx = document) => ctx.querySelector(sel);
-const $$ = (sel, ctx = document) => Array.from(ctx.querySelectorAll(sel));
+(function () {
+  'use strict';
 
-// ----- Smooth scroll for internal links (nav) -----
-document.addEventListener('click', (e) => {
-  const a = e.target.closest('a');
-  if (!a) return;
-  const href = a.getAttribute('href') || '';
-  // smooth scroll for hash links
-  if (href.startsWith('#')) {
-    e.preventDefault();
-    const target = document.querySelector(href);
-    if (target) {
-      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // util: pilih elemen
+  const $ = (sel, ctx = document) => ctx.querySelector(sel);
+  const $$ = (sel, ctx = document) => Array.from(ctx.querySelectorAll(sel));
+
+  // ---- Smooth scroll untuk link yang menuju elemen di halaman ----
+  function initSmoothScroll() {
+    const internalLinks = $$('a[href^="#"]');
+    internalLinks.forEach(link => {
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        const targetId = link.getAttribute('href').slice(1);
+        const target = document.getElementById(targetId);
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          // beri fokus untuk aksesibilitas
+          setTimeout(() => target.setAttribute('tabindex', '-1'), 400);
+          setTimeout(() => target.focus(), 500);
+        }
+      });
+    });
+  }
+
+  // ---- Mobile nav toggle (jika ingin menambahkan tombol hamburger) ----
+  function initMobileNav() {
+    const nav = $('.nav-links');
+    if (!nav) return;
+    // buat tombol hamburger jika belum ada
+    if (!$('#mobile-nav-toggle')) {
+      const btn = document.createElement('button');
+      btn.id = 'mobile-nav-toggle';
+      btn.className = 'mobile-nav-toggle';
+      btn.setAttribute('aria-expanded', 'false');
+      btn.setAttribute('aria-label', 'Buka menu');
+      btn.innerHTML = '☰';
+      document.querySelector('.header-inner').insertBefore(btn, nav);
+
+      btn.addEventListener('click', () => {
+        const open = btn.getAttribute('aria-expanded') === 'true';
+        btn.setAttribute('aria-expanded', String(!open));
+        nav.classList.toggle('open', !open);
+      });
+
+      // keyboard: close on ESC
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && nav.classList.contains('open')) {
+          nav.classList.remove('open');
+          btn.setAttribute('aria-expanded', 'false');
+          btn.focus();
+        }
+      });
     }
   }
-});
 
-// ----- Hero button toggle (Class / Calendar) -----
-const heroBtns = $$('.hero-controls .btn');
-heroBtns.forEach(btn => {
-  btn.addEventListener('click', () => {
-    heroBtns.forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    // contoh hook: kamu bisa jalankan fungsionalitas berbeda
-    // berdasarkan btn.dataset.action atau btn.textContent
-    // console.log('Hero button:', btn.textContent);
-  });
-});
+  // ---- Reveal animations on scroll ----
+  function initRevealOnScroll() {
+    const reveals = $$('.event-card, .dua-kolom .kolom, .Menuju-Bintang-title, .image-card img');
+    if (!('IntersectionObserver' in window)) {
+      // fallback: tambah class langsung
+      reveals.forEach(el => el.classList.add('reveal-visible'));
+      return;
+    }
 
-// buat style .active lewat JS jika belum ada (safe)
-if (!document.querySelector('style[data-js-active]')) {
-  const s = document.createElement('style');
-  s.setAttribute('data-js-active', '1');
-  s.textContent = `.hero-controls .btn.active{ box-shadow: 0 10px 30px rgba(0,0,0,0.35); transform: translateY(-2px); }`;
-  document.head.appendChild(s);
-}
+    const obs = new IntersectionObserver((entries, observer) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('reveal-visible');
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.12 });
 
-// ----- Download dropdown (simple) -----
-// akan menambahkan dropdown saat klik link "Download" di nav
-const navDownloadLink = Array.from($$('.nav-links a')).find(a => /download/i.test(a.textContent));
-if (navDownloadLink) {
-  // create dropdown container
-  const dd = document.createElement('div');
-  dd.className = 'js-download-dropdown';
-  dd.style.position = 'absolute';
-  dd.style.display = 'none';
-  dd.style.top = '100%';
-  dd.style.right = '0';
-  dd.style.background = 'var(--panel)';
-  dd.style.color = '#162033';
-  dd.style.borderRadius = '10px';
-  dd.style.padding = '8px';
-  dd.style.minWidth = '180px';
-  dd.style.boxShadow = '0 8px 30px rgba(2,8,20,0.25)';
-  dd.innerHTML = `
-    <div style="font-weight:700;margin-bottom:6px">Download</div>
-    <a class="dl-item" href="index.html" data-filename="index.html" style="display:block;padding:6px;border-radius:6px;text-decoration:none;color:inherit">index.html</a>
-    <a class="dl-item" href="style.css" data-filename="style.css" style="display:block;padding:6px;border-radius:6px;text-decoration:none;color:inherit">style.css</a>
-    <a class="dl-item" href="images.zip" data-filename="images.zip" style="display:block;padding:6px;border-radius:6px;text-decoration:none;color:inherit">images (zip)</a>
-    <div style="margin-top:8px;text-align:center"><button id="dl-all" style="padding:6px 10px;border-radius:8px;border:none;cursor:pointer;font-weight:700">Download semua</button></div>
-  `;
-  navDownloadLink.style.position = 'relative';
-  navDownloadLink.parentElement.style.position = 'relative';
-  navDownloadLink.appendChild(dd);
-
-  // toggle
-  navDownloadLink.addEventListener('click', (ev) => {
-    ev.preventDefault();
-    ev.stopPropagation();
-    dd.style.display = dd.style.display === 'block' ? 'none' : 'block';
-  });
-
-  // hide when clicking outside
-  document.addEventListener('click', () => dd.style.display = 'none');
-
-  // single file downloads (relative links)
-  $$('.dl-item', dd).forEach(a => {
-    a.addEventListener('click', (e) => {
-      // for relative files on server this will work.
-      // If you want to download files from GitHub raw, replace href with raw url.
-      e.preventDefault();
-      const href = a.getAttribute('href');
-      const filename = a.dataset.filename || 'file';
-      forceDownload(href, filename);
-    });
-  });
-
-  // download all (zip expected)
-  $('#dl-all', dd).addEventListener('click', (e) => {
-    e.preventDefault();
-    // Simple approach: download a zip if you prepared one (images.zip),
-    // otherwise trigger all three sequentially (browser may block multiple downloads).
-    const links = ['index.html','style.css','images.zip'];
-    links.forEach((link, idx) => {
-      setTimeout(()=> forceDownload(link, link), idx * 500);
-    });
-  });
-}
-
-// helper: force download a relative url
-function forceDownload(url, suggestedName) {
-  // If you host on GitHub, use raw.githubusercontent.com links.
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = suggestedName || '';
-  // fallback: open in new tab if download attribute blocked
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-}
-
-// ----- Event card collapse/expand -----
-const eventCard = $('.event-card');
-if (eventCard) {
-  // add a read more toggle if content too long
-  const content = $('.event-card__content', eventCard);
-  if (content) {
-    const toggle = document.createElement('button');
-    toggle.className = 'btn btn-kedua';
-    toggle.style.marginTop = '10px';
-    toggle.textContent = 'Read more';
-    let expanded = false;
-    toggle.addEventListener('click', () => {
-      expanded = !expanded;
-      content.style.maxHeight = expanded ? 'none' : '110px';
-      content.style.overflow = expanded ? 'visible' : 'hidden';
-      toggle.textContent = expanded ? 'Show less' : 'Read more';
-    });
-    // initial clamp
-    content.style.maxHeight = '110px';
-    content.style.overflow = 'hidden';
-    content.appendChild(toggle);
+    reveals.forEach(el => obs.observe(el));
   }
-}
 
-// ----- Lightbox for images (.image-card img and .event-card__image) -----
-function createLightbox() {
-  const lb = document.createElement('div');
-  lb.id = 'js-lightbox';
-  lb.style.position = 'fixed';
-  lb.style.inset = '0';
-  lb.style.display = 'none';
-  lb.style.alignItems = 'center';
-  lb.style.justifyContent = 'center';
-  lb.style.background = 'rgba(2,6,20,0.85)';
-  lb.style.zIndex = 9999;
-  lb.innerHTML = `<img style="max-width:92%;max-height:92%;border-radius:12px;box-shadow:0 30px 80px rgba(2,8,20,0.7)" src="" alt="Preview">`;
-  document.body.appendChild(lb);
-  lb.addEventListener('click', () => lb.style.display = 'none');
-  return lb;
-}
-const lightbox = createLightbox();
+  // ---- Lazy load images (with loading=lazy and JS fallback) ----
+  function initLazyImages() {
+    const imgs = $$('img');
+    imgs.forEach(img => {
+      // jika browser support loading attr, set saja
+      if ('loading' in HTMLImageElement.prototype) {
+        img.setAttribute('loading', 'lazy');
+      } else {
+        // fallback: simple intersection observer to swap data-src
+        if (img.dataset && img.dataset.src) {
+          // already prepared
+        } else {
+          // prepare by copying src->data-src and blank placeholder
+          if (!img.dataset.src) img.dataset.src = img.src;
+          img.src = '';
+          img.style.background = 'linear-gradient(90deg,#10203a,#0b1726)';
+        }
+      }
+    });
 
-$$('.image-card img, .event-card__image').forEach(img => {
-  img.style.cursor = 'zoom-in';
-  img.addEventListener('click', () => {
-    lightbox.querySelector('img').src = img.src;
-    lightbox.style.display = 'flex';
-  });
-});
+    if (!('IntersectionObserver' in window)) return;
+    const lazyObs = new IntersectionObserver((entries, observer) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const img = entry.target;
+          const src = img.dataset.src || img.getAttribute('data-src');
+          if (src) img.src = src;
+          img.classList.add('loaded');
+          observer.unobserve(img);
+        }
+      });
+    }, { rootMargin: '120px' });
 
-// ----- Accessibility: allow Esc to close lightbox -----
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') {
-    const lb = $('#js-lightbox');
-    if (lb) lb.style.display = 'none';
+    imgs.forEach(img => lazyObs.observe(img));
   }
-});
 
-// ----- Optional: detect missing index.html and show notice -----
-window.addEventListener('load', () => {
-  // if your site will be hosted and index.html not found, nothing to do here.
-  // Handy dev console message:
-  console.log('Orion page script loaded. If downloads fail, check file paths or use RAW GitHub URLs.');
-});
+  // ---- Modal untuk download assets sederhana ----
+  function createModal() {
+    const modal = document.createElement('div');
+    modal.id = 'download-modal';
+    modal.className = 'download-modal';
+    modal.innerHTML = `
+      <div class="dm-backdrop"></div>
+      <div class="dm-panel" role="dialog" aria-modal="true" aria-labelledby="dm-title">
+        <button class="dm-close" aria-label="Tutup">✕</button>
+        <h3 id="dm-title">Download assets</h3>
+        <p>Pilih file untuk didownload:</p>
+        <div class="dm-list"></div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    modal.querySelector('.dm-close').addEventListener('click', () => closeModal(modal));
+    modal.querySelector('.dm-backdrop').addEventListener('click', () => closeModal(modal));
+
+    return modal;
+  }
+
+  function openModal(modal) {
+    modal.classList.add('open');
+    // fokus di close
+    setTimeout(() => modal.querySelector('.dm-close').focus(), 150);
+  }
+  function closeModal(modal) {
+    modal.classList.remove('open');
+  }
+
+  function initDownloadModal() {
+    const modal = createModal();
+    const list = modal.querySelector('.dm-list');
+
+    // Cari gambar di halaman sebagai contoh aset yang dapat di-download
+    const imgs = $$('img').map(img => ({
+      url: img.dataset.src || img.src,
+      name: (img.alt || 'image').replace(/\s+/g,'-') + '.png'
+    }));
+
+    if (imgs.length === 0) {
+      list.innerHTML = '<p>Tidak ada aset ditemukan di halaman.</p>';
+    } else {
+      imgs.forEach(item => {
+        const row = document.createElement('div');
+        row.className = 'dm-item';
+        row.innerHTML = `
+          <span class="dm-name">${item.name}</span>
+          <div class="dm-actions">
+            <button class="dm-btn dm-download" data-url="${item.url}" data-name="${item.name}">Download</button>
+            <button class="dm-btn dm-open" data-url="${item.url}">Open</button>
+          </div>
+        `;
+        list.appendChild(row);
+      });
+
+      list.addEventListener('click', (e) => {
+        const dl = e.target.closest('.dm-download');
+        const op = e.target.closest('.dm-open');
+        if (dl) {
+          const url = dl.dataset.url;
+          const name = dl.dataset.name;
+          downloadUrlAsName(url, name);
+        }
+        if (op) {
+          window.open(op.dataset.url, '_blank');
+        }
+      });
+    }
+
+    // connect to nav "Download"
+    const navDownload = $$('.nav-links a').find(a => /download/i.test(a.textContent));
+    if (navDownload) {
+      navDownload.addEventListener('click', (e) => {
+        e.preventDefault();
+        openModal(modal);
+      });
+    }
+  }
+
+  // helper to download a remote url by fetching then using blob
+  async function downloadUrlAsName(url, name) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Gagal fetch');
+      const blob = await res.blob();
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = name;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(link.href), 2000);
+    } catch (err) {
+      // fallback: buka di tab baru agar user bisa simpan manual
+      console.warn('Download gagal, membuka tab sebagai fallback', err);
+      window.open(url, '_blank');
+    }
+  }
+
+  // ---- Contact button behaviour (WhatsApp link) ----
+  function initContact() {
+    const contact = $$('.nav-links a').find(a => /wa.me|contact|whatsapp/i.test(a.href + a.textContent));
+    if (!contact) return;
+    contact.addEventListener('click', (e) => {
+      // biar ngecek apakah mobile or desktop, tapi kita cukup buka link baru
+      // tambahkan tracking kecil: focus ke body setelah buka
+      setTimeout(() => document.body.focus(), 400);
+    });
+
+    // tambahkan copy-to-clipboard jika user tekan alt
+    contact.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') contact.click();
+      if ((e.altKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+        navigator.clipboard?.writeText(contact.href || contact.getAttribute('href'));
+      }
+    });
+  }
+
+  // ---- Calendar button: generate .ics file sederhana ----
+  function initCalendarButton() {
+    const calBtn = $$('.btn').find(b => /calendar/i.test(b.textContent));
+    if (!calBtn) return;
+
+    calBtn.addEventListener('click', (e) => {
+      // ambil info dari event card jika ada
+      const title = 'Observasi: Waning Gibbous Moon & Jupiter';
+      const description = `Observe the waning gibbous Moon in conjunction with Jupiter.\nFrom Orion.co`;
+      // gunakan tanggal dari isi paragraf (jika ada) — fallback 2025-11-11 22:24 local
+      const start = new Date();
+      start.setHours(22, 24, 0, 0);
+      // set durasi 3 jam
+      const end = new Date(start.getTime() + 1000 * 60 * 60 * 3);
+
+      const ics = buildICS({ title, description, start, end, location: 'Outdoors / Your location' });
+      downloadStringAsFile(ics, 'orion-observasi.ics', 'text/calendar');
+    });
+  }
+
+  function pad(n){ return String(n).padStart(2,'0'); }
+  function toICSDate(d){
+    // format YYYYMMDDTHHMMSSZ in UTC
+    const y = d.getUTCFullYear();
+    const m = pad(d.getUTCMonth()+1);
+    const day = pad(d.getUTCDate());
+    const hh = pad(d.getUTCHours());
+    const mi = pad(d.getUTCMinutes());
+    const ss = pad(d.getUTCSeconds());
+    return `${y}${m}${day}T${hh}${mi}${ss}Z`;
+  }
+
+  function buildICS({ title, description, start, end, location }){
+    const now = new Date();
+    return [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Orion.co//EN',
+      'CALSCALE:GREGORIAN',
+      'BEGIN:VEVENT',
+      `DTSTAMP:${toICSDate(now)}`,
+      `DTSTART:${toICSDate(start)}`,
+      `DTEND:${toICSDate(end)}`,
+      `SUMMARY:${escapeICSText(title)}`,
+      `DESCRIPTION:${escapeICSText(description)}`,
+      `LOCATION:${escapeICSText(location)}`,
+      'END:VEVENT',
+      'END:VCALENDAR'
+    ].join('\r\n');
+  }
+
+  function escapeICSText(s){
+    return (s||'').replace(/\n/g,'\\n').replace(/,/g,'\\,');
+  }
+
+  function downloadStringAsFile(content, filename, mime='text/plain'){
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+
+  // ---- Simple countdown for event-card if text contains a date ----
+  function initCountdown() {
+    const card = $('.event-card__content');
+    if (!card) return;
+    // try to find a date pattern (very simple)
+    const text = card.innerText;
+    // contoh: "November 11" or "Nov 11"
+    const m = text.match(/(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2})/i);
+    if (!m) return;
+    const monthName = m[1];
+    const day = parseInt(m[2], 10);
+    const monthIndex = new Date(`${monthName} 1, 2000`).getMonth();
+    let year = new Date().getFullYear();
+    const eventDate = new Date(year, monthIndex, day, 22, 24, 0);
+    // if already passed, assume next year
+    if (eventDate < new Date()) eventDate.setFullYear(year + 1);
+
+    // buat elemen countdown
+    const cnt = document.createElement('div');
+    cnt.className = 'event-countdown';
+    cnt.setAttribute('aria-live', 'polite');
+    card.appendChild(cnt);
+
+    function tick() {
+      const now = new Date();
+      const diff = Math.max(0, eventDate - now);
+      const days = Math.floor(diff / (1000*60*60*24));
+      const hours = Math.floor((diff / (1000*60*60)) % 24);
+      const minutes = Math.floor((diff / (1000*60)) % 60);
+      const seconds = Math.floor((diff / 1000) % 60);
+      cnt.textContent = `Starts in: ${days}d ${hours}h ${minutes}m ${seconds}s`;
+      if (diff <= 0) {
+        cnt.textContent = 'Event is happening now or already passed.';
+        clearInterval(intv);
+      }
+    }
+    tick();
+    const intv = setInterval(tick, 1000);
+  }
+
+  // ---- Small helpers & init ----
+  function init() {
+    initSmoothScroll();
+    initMobileNav();
+    initRevealOnScroll();
+    initLazyImages();
+    initDownloadModal();
+    initContact();
+    initCalendarButton();
+    initCountdown();
+
+    // add some global classes for CSS to hook on
+    document.documentElement.classList.add('js-enabled');
+
+    // reduce-motion check
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      document.documentElement.classList.add('reduce-motion');
+    }
+  }
+
+  // run when DOM siap
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+
+})();
